@@ -345,6 +345,7 @@ export const getTrendingArticles = async (req: any, res: Response) => {
     const { limit = 5 } = req.query;
     const limitNum = Math.max(1, Math.min(20, parseInt(String(limit), 10) || 5));
 
+    // Use limit directly in query string (safe since we validate it above)
     const [articles] = await dbPromise.execute(
       `SELECT a.*, c.name as category_name, 
               GROUP_CONCAT(t.name) as tags
@@ -355,8 +356,7 @@ export const getTrendingArticles = async (req: any, res: Response) => {
        WHERE a.status = 'published'
        GROUP BY a.id
        ORDER BY a.views DESC, a.published_at DESC
-       LIMIT ?`,
-      [limitNum]
+       LIMIT ${limitNum}`
     );
 
     return res.json({ articles });
@@ -387,67 +387,8 @@ export const getRelatedArticles = async (req: any, res: Response) => {
       params.push(category);
     }
 
-    query += ` GROUP BY a.id ORDER BY a.views DESC, a.published_at DESC LIMIT ?`;
-    params.push(limitNum);
-
-    const [articles] = await dbPromise.execute(query, params);
-
-    return res.json({ articles });
-  } catch (error) {
-    console.error('Get related articles error:', error);
-    return res.status(500).json({ message: 'Server error' });
-  }
-};
-
-export const getPublicArticle = async (req: any, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    const [articles] = await dbPromise.execute(
-      `SELECT a.*, c.name as category_name,
-              GROUP_CONCAT(t.id) as tag_ids,
-              GROUP_CONCAT(t.name) as tag_names
-       FROM articles a
-       LEFT JOIN categories c ON a.category_id = c.id
-       LEFT JOIN article_tags at ON a.id = at.article_id
-       LEFT JOIN tags t ON at.tag_id = t.id
-       WHERE a.id = ? AND a.status = 'published'
-       GROUP BY a.id`,
-      [id]
-    );
-
-    const article = (articles as any[])[0];
-
-    if (!article) {
-      return res.status(404).json({ message: 'Article not found' });
-    }
-
-    // Increment view count
-    await dbPromise.execute(
-      'UPDATE articles SET views = views + 1 WHERE id = ?',
-      [id]
-    );
-
-    // Parse tags
-    article.tags = article.tag_ids
-      ? article.tag_ids.split(',').map((id: string, index: number) => ({
-          id: Number(id),
-          name: article.tag_names.split(',')[index],
-        }))
-      : [];
-
-    delete article.tag_ids;
-    delete article.tag_names;
-
-    return res.json(article);
-  } catch (error) {
-    console.error('Get public article error:', error);
-    return res.status(500).json({ message: 'Server error' });
-  }
-};
-
-
-    params.push(limitNum);
+    // Use limit directly in query string (safe since we validate it above)
+    query += ` GROUP BY a.id ORDER BY a.views DESC, a.published_at DESC LIMIT ${limitNum}`;
 
     const [articles] = await dbPromise.execute(query, params);
 

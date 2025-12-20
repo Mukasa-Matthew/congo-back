@@ -31,7 +31,3 @@ router.patch('/:id/publish', authenticate, publishArticle);
 
 export default router;
 
-
-
-export default router;
-
