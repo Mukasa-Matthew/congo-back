@@ -1,0 +1,42 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Congo News Backend",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "setup-db": "node scripts/setup-database.js",
+    "update-admin": "node scripts/update-admin-credentials.js",
+    "migrate-featured-image": "node scripts/migrate-featured-image.js",
+    "migrate-featured-image-text": "node scripts/migrate-featured-image-text.js",
+    "migrate-featured-image-longtext": "node scripts/migrate-featured-image-longtext.js",
+    "migrate-newsletter": "node scripts/migrate-newsletter-table.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.15.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.10.2",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}
