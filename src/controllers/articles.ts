@@ -202,15 +202,16 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
     }
 
     // Get current article to check existing status and published_at
-    const [currentArticle] = await dbPromise.execute(
+    const [currentArticleRows] = await dbPromise.execute(
       'SELECT status, published_at FROM articles WHERE id = ?',
       [id]
-    );
-    const article = (currentArticle as any[])[0];
+    ) as any[];
     
-    if (!article) {
+    if (!currentArticleRows || currentArticleRows.length === 0) {
       return res.status(404).json({ message: 'Article not found' });
     }
+
+    const article = currentArticleRows[0];
 
     // Use provided status or keep current status
     finalStatus = finalStatus || article.status;
