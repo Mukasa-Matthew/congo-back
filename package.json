@@ -9,10 +9,13 @@
     "start": "node dist/index.js",
     "setup-db": "node scripts/setup-database.js",
     "update-admin": "node scripts/update-admin-credentials.js",
+    "migrate": "node scripts/run-migrations.js",
     "migrate-featured-image": "node scripts/migrate-featured-image.js",
     "migrate-featured-image-text": "node scripts/migrate-featured-image-text.js",
     "migrate-featured-image-longtext": "node scripts/migrate-featured-image-longtext.js",
     "migrate-newsletter": "node scripts/migrate-newsletter-table.js",
+    "setup-deploy": "bash scripts/setup-deployment.sh",
+    "deploy": "bash scripts/deploy.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

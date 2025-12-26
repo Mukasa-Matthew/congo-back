@@ -2,64 +2,6 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { dbPromise } from '../config/database';
 
-// Helper function to convert ISO datetime string to MySQL datetime format
-const convertToMySQLDateTime = (dateString: string | null | undefined): string | null => {
-  // Handle null, undefined, or empty string
-  if (!dateString || typeof dateString !== 'string' || dateString.trim() === '') {
-    return null;
-  }
-  
-  const trimmed = dateString.trim();
-  
-  try {
-    // If it's already in MySQL format (YYYY-MM-DD HH:MM:SS), return as is
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
-      return trimmed;
-    }
-    
-    // Handle datetime-local format (YYYY-MM-DDTHH:MM) - no timezone
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) {
-      // Convert to MySQL format directly
-      return trimmed.replace('T', ' ') + ':00';
-    }
-    
-    // Handle ISO format with milliseconds and timezone (YYYY-MM-DDTHH:MM:SS.sssZ)
-    // Example: 2025-12-23T23:27:00.000Z
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(trimmed)) {
-      // Extract date and time parts directly from the string
-      const dateTimePart = trimmed.replace('Z', '').replace(/\.\d{3}$/, '');
-      return dateTimePart.replace('T', ' ');
-    }
-    
-    // Handle ISO format without milliseconds but with timezone (YYYY-MM-DDTHH:MM:SSZ)
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(trimmed)) {
-      return trimmed.replace('Z', '').replace('T', ' ');
-    }
-    
-    // Convert ISO string (with or without timezone) to MySQL datetime format
-    const date = new Date(trimmed);
-    if (isNaN(date.getTime())) {
-      console.warn('Invalid date string provided:', trimmed);
-      return null;
-    }
-    
-    // Use UTC methods to preserve the original timezone from ISO string
-    // This ensures we don't convert to server's local timezone
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const hours = String(date.getUTCHours()).padStart(2, '0');
-    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-    
-    const mysqlDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    return mysqlDateTime;
-  } catch (error) {
-    console.error('Error converting datetime:', error, 'Input:', trimmed);
-    return null;
-  }
-};
-
 export const getArticles = async (req: AuthRequest, res: Response) => {
   try {
     const { page = 1, limit = 10, status, category, search } = req.query;
@@ -209,7 +151,7 @@ export const createArticle = async (req: AuthRequest, res: Response) => {
         meta_title,
         meta_description,
         status || 'draft',
-        convertToMySQLDateTime(scheduled_publish_date),
+        scheduled_publish_date || null,
         req.user?.id,
       ]
     );
@@ -252,82 +194,11 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
     // Handle featured_image URL (now stored as TEXT, no truncation needed)
     const featuredImageUrl = featured_image ? String(featured_image) : null;
 
-    // Validate status if provided
-    const validStatuses = ['draft', 'published', 'archived'];
-    let finalStatus = status;
-    if (status && typeof status === 'string' && !validStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status value' });
-    }
-
-    // Get current article to check existing status and published_at
-    const [currentArticleRows] = await dbPromise.execute(
-      'SELECT status, published_at FROM articles WHERE id = ?',
-      [id]
-    );
-    
-    const articleRows = currentArticleRows as any[];
-    const article = articleRows && articleRows.length > 0 ? articleRows[0] : null;
-    
-    if (!article) {
-      return res.status(404).json({ message: 'Article not found' });
-    }
-
-    // Use provided status or keep current status
-    finalStatus = finalStatus || article.status || 'draft';
-
-    // Check if status is being changed to 'published' and set published_at if not already set
-    let publishedAtUpdate = '';
-    if (finalStatus === 'published' && !article.published_at) {
-      publishedAtUpdate = ', published_at = NOW()';
-    }
-
-    // Convert scheduled_publish_date to MySQL format
-    console.log('Original scheduled_publish_date:', scheduled_publish_date, 'Type:', typeof scheduled_publish_date);
-    const mysqlScheduledDate = convertToMySQLDateTime(scheduled_publish_date);
-    console.log('Converted scheduled_publish_date:', mysqlScheduledDate);
-    
-    // Safety check: ensure we never pass ISO format to MySQL
-    if (mysqlScheduledDate && typeof mysqlScheduledDate === 'string' && mysqlScheduledDate.includes('T')) {
-      console.error('ERROR: ISO format detected in converted date! Original:', scheduled_publish_date, 'Converted:', mysqlScheduledDate);
-      // Force conversion again as fallback
-      const date = new Date(mysqlScheduledDate);
-      if (!isNaN(date.getTime())) {
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        const hours = String(date.getUTCHours()).padStart(2, '0');
-        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-        const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-        const fallbackDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-        console.log('Using fallback conversion:', fallbackDate);
-        await dbPromise.execute(
-          `UPDATE articles 
-           SET title = ?, excerpt = ?, body = ?, featured_image = ?, 
-               category_id = ?, meta_title = ?, meta_description = ?, 
-               status = ?, scheduled_publish_date = ?, updated_at = NOW()${publishedAtUpdate}
-           WHERE id = ?`,
-          [
-            title,
-            excerpt,
-            body,
-            featuredImageUrl,
-            category_id || null,
-            meta_title,
-            meta_description,
-            finalStatus,
-            fallbackDate,
-            id,
-          ]
-        );
-      } else {
-        throw new Error('Invalid date format after conversion attempt');
-      }
-    } else {
-      await dbPromise.execute(
+    await dbPromise.execute(
       `UPDATE articles 
        SET title = ?, excerpt = ?, body = ?, featured_image = ?, 
            category_id = ?, meta_title = ?, meta_description = ?, 
-           status = ?, scheduled_publish_date = ?, updated_at = NOW()${publishedAtUpdate}
+           status = ?, scheduled_publish_date = ?, updated_at = NOW()
        WHERE id = ?`,
       [
         title,
@@ -337,12 +208,11 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
         category_id || null,
         meta_title,
         meta_description,
-        finalStatus,
-        mysqlScheduledDate,
+        status,
+        scheduled_publish_date || null,
         id,
       ]
     );
-    }
 
     // Update tags
     await dbPromise.execute('DELETE FROM article_tags WHERE article_id = ?', [
@@ -359,18 +229,9 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
     }
 
     return res.json({ message: 'Article updated' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Update article error:', error);
-    console.error('Error details:', {
-      message: error?.message,
-      stack: error?.stack,
-      code: error?.code,
-      errno: error?.errno,
-      sql: error?.sql,
-      sqlState: error?.sqlState,
-      sqlMessage: error?.sqlMessage
-    });
-    return res.status(500).json({ message: 'Server error', error: error?.message || 'Unknown error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
