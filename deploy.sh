@@ -7,9 +7,9 @@ set -e
 
 echo "🚀 Starting deployment..."
 
-# Install dependencies
+# Install dependencies (including devDependencies for building)
 echo "📦 Installing dependencies..."
-npm install --production
+npm install
 
 # Build TypeScript
 echo "🔨 Building TypeScript..."

@@ -20,7 +20,7 @@ PROJECT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
 cd "$PROJECT_DIR"
 
 echo -e "${YELLOW}📦 Installing dependencies...${NC}"
-npm install --production
+npm install
 
 echo -e "${YELLOW}🔨 Building TypeScript...${NC}"
 npm run build
