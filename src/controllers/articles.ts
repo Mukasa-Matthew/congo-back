@@ -194,11 +194,38 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
     // Handle featured_image URL (now stored as TEXT, no truncation needed)
     const featuredImageUrl = featured_image ? String(featured_image) : null;
 
+    // Validate status if provided
+    const validStatuses = ['draft', 'published', 'archived'];
+    let finalStatus = status;
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value' });
+    }
+
+    // Get current article to check existing status and published_at
+    const [currentArticle] = await dbPromise.execute(
+      'SELECT status, published_at FROM articles WHERE id = ?',
+      [id]
+    );
+    const article = (currentArticle as any[])[0];
+    
+    if (!article) {
+      return res.status(404).json({ message: 'Article not found' });
+    }
+
+    // Use provided status or keep current status
+    finalStatus = finalStatus || article.status;
+
+    // Check if status is being changed to 'published' and set published_at if not already set
+    let publishedAtUpdate = '';
+    if (finalStatus === 'published' && !article.published_at) {
+      publishedAtUpdate = ', published_at = NOW()';
+    }
+
     await dbPromise.execute(
       `UPDATE articles 
        SET title = ?, excerpt = ?, body = ?, featured_image = ?, 
            category_id = ?, meta_title = ?, meta_description = ?, 
-           status = ?, scheduled_publish_date = ?, updated_at = NOW()
+           status = ?, scheduled_publish_date = ?, updated_at = NOW()${publishedAtUpdate}
        WHERE id = ?`,
       [
         title,
@@ -208,7 +235,7 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
         category_id || null,
         meta_title,
         meta_description,
-        status,
+        finalStatus,
         scheduled_publish_date || null,
         id,
       ]
