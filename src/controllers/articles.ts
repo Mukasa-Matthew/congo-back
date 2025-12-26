@@ -4,17 +4,29 @@ import { dbPromise } from '../config/database';
 
 // Helper function to convert ISO datetime string to MySQL datetime format
 const convertToMySQLDateTime = (dateString: string | null | undefined): string | null => {
-  if (!dateString) return null;
+  // Handle null, undefined, or empty string
+  if (!dateString || typeof dateString !== 'string' || dateString.trim() === '') {
+    return null;
+  }
+  
+  const trimmed = dateString.trim();
   
   try {
     // If it's already in MySQL format (YYYY-MM-DD HH:MM:SS), return as is
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateString)) {
-      return dateString;
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+      return trimmed;
     }
     
-    // Convert ISO string to MySQL datetime format
-    const date = new Date(dateString);
+    // Handle datetime-local format (YYYY-MM-DDTHH:MM) - no timezone
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) {
+      // Convert to MySQL format directly
+      return trimmed.replace('T', ' ') + ':00';
+    }
+    
+    // Convert ISO string (with or without timezone) to MySQL datetime format
+    const date = new Date(trimmed);
     if (isNaN(date.getTime())) {
+      console.warn('Invalid date string provided:', trimmed);
       return null;
     }
     
@@ -27,9 +39,10 @@ const convertToMySQLDateTime = (dateString: string | null | undefined): string |
     const minutes = String(date.getUTCMinutes()).padStart(2, '0');
     const seconds = String(date.getUTCSeconds()).padStart(2, '0');
     
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    const mysqlDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    return mysqlDateTime;
   } catch (error) {
-    console.error('Error converting datetime:', error);
+    console.error('Error converting datetime:', error, 'Input:', trimmed);
     return null;
   }
 };
@@ -255,6 +268,9 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
       publishedAtUpdate = ', published_at = NOW()';
     }
 
+    // Convert scheduled_publish_date to MySQL format
+    const mysqlScheduledDate = convertToMySQLDateTime(scheduled_publish_date);
+    
     await dbPromise.execute(
       `UPDATE articles 
        SET title = ?, excerpt = ?, body = ?, featured_image = ?, 
@@ -270,7 +286,7 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
         meta_title,
         meta_description,
         finalStatus,
-        convertToMySQLDateTime(scheduled_publish_date),
+        mysqlScheduledDate,
         id,
       ]
     );
