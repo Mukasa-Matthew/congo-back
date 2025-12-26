@@ -2,6 +2,38 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { dbPromise } from '../config/database';
 
+// Helper function to convert ISO datetime string to MySQL datetime format
+const convertToMySQLDateTime = (dateString: string | null | undefined): string | null => {
+  if (!dateString) return null;
+  
+  try {
+    // If it's already in MySQL format (YYYY-MM-DD HH:MM:SS), return as is
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    
+    // Convert ISO string to MySQL datetime format
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    
+    // Use UTC methods to preserve the original timezone from ISO string
+    // This ensures we don't convert to server's local timezone
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    console.error('Error converting datetime:', error);
+    return null;
+  }
+};
+
 export const getArticles = async (req: AuthRequest, res: Response) => {
   try {
     const { page = 1, limit = 10, status, category, search } = req.query;
@@ -151,7 +183,7 @@ export const createArticle = async (req: AuthRequest, res: Response) => {
         meta_title,
         meta_description,
         status || 'draft',
-        scheduled_publish_date || null,
+        convertToMySQLDateTime(scheduled_publish_date),
         req.user?.id,
       ]
     );
@@ -197,7 +229,7 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
     // Validate status if provided
     const validStatuses = ['draft', 'published', 'archived'];
     let finalStatus = status;
-    if (status && !validStatuses.includes(status)) {
+    if (status && typeof status === 'string' && !validStatuses.includes(status)) {
       return res.status(400).json({ message: 'Invalid status value' });
     }
 
@@ -207,14 +239,15 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
       [id]
     );
     
-    const article = (currentArticleRows as any[])[0];
+    const articleRows = currentArticleRows as any[];
+    const article = articleRows && articleRows.length > 0 ? articleRows[0] : null;
     
     if (!article) {
       return res.status(404).json({ message: 'Article not found' });
     }
 
     // Use provided status or keep current status
-    finalStatus = finalStatus || article.status;
+    finalStatus = finalStatus || article.status || 'draft';
 
     // Check if status is being changed to 'published' and set published_at if not already set
     let publishedAtUpdate = '';
@@ -237,7 +270,7 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
         meta_title,
         meta_description,
         finalStatus,
-        scheduled_publish_date || null,
+        convertToMySQLDateTime(scheduled_publish_date),
         id,
       ]
     );
@@ -257,9 +290,18 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
     }
 
     return res.json({ message: 'Article updated' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update article error:', error);
-    return res.status(500).json({ message: 'Server error' });
+    console.error('Error details:', {
+      message: error?.message,
+      stack: error?.stack,
+      code: error?.code,
+      errno: error?.errno,
+      sql: error?.sql,
+      sqlState: error?.sqlState,
+      sqlMessage: error?.sqlMessage
+    });
+    return res.status(500).json({ message: 'Server error', error: error?.message || 'Unknown error' });
   }
 };
 
