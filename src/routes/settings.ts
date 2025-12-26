@@ -1,6 +1,6 @@
 import express from 'express';
 import { getSettings, getPublicSettings, updateSettings } from '../controllers/settings';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -8,8 +8,8 @@ const router = express.Router();
 router.get('/public', getPublicSettings);
 
 // Protected routes (for admin panel)
-router.get('/', authenticate, getSettings);
-router.put('/', authenticate, updateSettings);
+router.get('/', authenticate, requireAdmin, getSettings);
+router.put('/', authenticate, requireAdmin, updateSettings);
 
 export default router;
 

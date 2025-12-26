@@ -26,13 +26,13 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
     const [categories] = await dbPromise.execute(
       'SELECT COUNT(*) as count FROM categories'
     );
-    const categoriesCount = (categories as any[])[0].count;
+    const categoriesCount = Number((categories as any[])[0].count) || 0;
 
     // Total Views
     const [views] = await dbPromise.execute(
       'SELECT SUM(views) as total FROM articles'
     );
-    const totalViews = (views as any[])[0].total || 0;
+    const totalViews = Number((views as any[])[0].total) || 0;
 
     // Trending Articles (top 5 by views)
     const [trending] = await dbPromise.execute(
@@ -53,11 +53,15 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
     );
 
     return res.json({
-      totalArticles: totalCount,
-      publishedArticles: publishedCount,
-      drafts: draftsCount,
-      categoriesCount: categoriesCount,
+      totalArticles: Number(totalCount) || 0,
+      publishedArticles: Number(publishedCount) || 0,
+      drafts: Number(draftsCount) || 0,
+      totalCategories: categoriesCount,
+      totalTags: 0, // TODO: Add tags count if needed
+      totalComments: 0, // TODO: Add comments count if needed
+      pendingComments: 0, // TODO: Add pending comments count if needed
       totalViews: totalViews,
+      newsletterSubscribers: 0, // TODO: Add newsletter subscribers count if needed
       trendingArticles: trending,
       recentArticles: recent,
     });
