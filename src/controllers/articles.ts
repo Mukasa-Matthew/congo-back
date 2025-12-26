@@ -23,6 +23,19 @@ const convertToMySQLDateTime = (dateString: string | null | undefined): string |
       return trimmed.replace('T', ' ') + ':00';
     }
     
+    // Handle ISO format with milliseconds and timezone (YYYY-MM-DDTHH:MM:SS.sssZ)
+    // Example: 2025-12-23T23:27:00.000Z
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(trimmed)) {
+      // Extract date and time parts directly from the string
+      const dateTimePart = trimmed.replace('Z', '').replace(/\.\d{3}$/, '');
+      return dateTimePart.replace('T', ' ');
+    }
+    
+    // Handle ISO format without milliseconds but with timezone (YYYY-MM-DDTHH:MM:SSZ)
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(trimmed)) {
+      return trimmed.replace('Z', '').replace('T', ' ');
+    }
+    
     // Convert ISO string (with or without timezone) to MySQL datetime format
     const date = new Date(trimmed);
     if (isNaN(date.getTime())) {
@@ -269,9 +282,48 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
     }
 
     // Convert scheduled_publish_date to MySQL format
+    console.log('Original scheduled_publish_date:', scheduled_publish_date, 'Type:', typeof scheduled_publish_date);
     const mysqlScheduledDate = convertToMySQLDateTime(scheduled_publish_date);
+    console.log('Converted scheduled_publish_date:', mysqlScheduledDate);
     
-    await dbPromise.execute(
+    // Safety check: ensure we never pass ISO format to MySQL
+    if (mysqlScheduledDate && typeof mysqlScheduledDate === 'string' && mysqlScheduledDate.includes('T')) {
+      console.error('ERROR: ISO format detected in converted date! Original:', scheduled_publish_date, 'Converted:', mysqlScheduledDate);
+      // Force conversion again as fallback
+      const date = new Date(mysqlScheduledDate);
+      if (!isNaN(date.getTime())) {
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const hours = String(date.getUTCHours()).padStart(2, '0');
+        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+        const fallbackDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        console.log('Using fallback conversion:', fallbackDate);
+        await dbPromise.execute(
+          `UPDATE articles 
+           SET title = ?, excerpt = ?, body = ?, featured_image = ?, 
+               category_id = ?, meta_title = ?, meta_description = ?, 
+               status = ?, scheduled_publish_date = ?, updated_at = NOW()${publishedAtUpdate}
+           WHERE id = ?`,
+          [
+            title,
+            excerpt,
+            body,
+            featuredImageUrl,
+            category_id || null,
+            meta_title,
+            meta_description,
+            finalStatus,
+            fallbackDate,
+            id,
+          ]
+        );
+      } else {
+        throw new Error('Invalid date format after conversion attempt');
+      }
+    } else {
+      await dbPromise.execute(
       `UPDATE articles 
        SET title = ?, excerpt = ?, body = ?, featured_image = ?, 
            category_id = ?, meta_title = ?, meta_description = ?, 
@@ -290,6 +342,7 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
         id,
       ]
     );
+    }
 
     // Update tags
     await dbPromise.execute('DELETE FROM article_tags WHERE article_id = ?', [
