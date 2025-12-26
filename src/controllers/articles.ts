@@ -205,13 +205,13 @@ export const updateArticle = async (req: AuthRequest, res: Response) => {
     const [currentArticleRows] = await dbPromise.execute(
       'SELECT status, published_at FROM articles WHERE id = ?',
       [id]
-    ) as any[];
+    );
     
-    if (!currentArticleRows || currentArticleRows.length === 0) {
+    const article = (currentArticleRows as any[])[0];
+    
+    if (!article) {
       return res.status(404).json({ message: 'Article not found' });
     }
-
-    const article = currentArticleRows[0];
 
     // Use provided status or keep current status
     finalStatus = finalStatus || article.status;
