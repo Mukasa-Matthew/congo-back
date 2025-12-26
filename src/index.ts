@@ -12,6 +12,7 @@ import commentsRoutes from './routes/comments';
 import homepageRoutes from './routes/homepage';
 import dashboardRoutes from './routes/dashboard';
 import newsletterRoutes from './routes/newsletter';
+import settingsRoutes from './routes/settings';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/homepage', homepageRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
